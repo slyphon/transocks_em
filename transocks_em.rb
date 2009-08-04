@@ -37,6 +37,8 @@ end
 class TransocksServer < EM::Connection
   def post_init
     orig_host, orig_port = orig_socket
+    addr = [orig_host].pack("N").unpack("CCCC")*'.'
+    puts "connecting to #{addr}:#{orig_port}"
     @proxied = EM.connect('127.1', 6666, EM::P::Socks4, self, orig_host, orig_port)
     proxy_incoming_to @proxied
   end
@@ -50,7 +52,9 @@ class TransocksServer < EM::Connection
   end
 
   def orig_socket
-    addr = Socket.for_fd(get_fd).getsockopt(Socket::SOL_IP, 80) # Socket::SO_ORIGINAL_DST
+    $s ||= []
+    $s << s = Socket.for_fd(get_fd)
+    addr = s.getsockopt(Socket::SOL_IP, 80) # Socket::SO_ORIGINAL_DST
     _, port, host = addr.unpack("nnN")
 
     [host, port]
