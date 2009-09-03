@@ -2,7 +2,16 @@ require 'socket'
 require 'rubygems'
 require 'eventmachine'
 
-class EM::P::Socks4 < EM::Connection
+class EM::Connection
+  def orig_sockaddr
+    addr = get_sock_opt(Socket::SOL_IP, 80) # Socket::SO_ORIGINAL_DST
+    _, port, host = addr.unpack("nnN")
+
+    [host, port]
+  end
+end
+
+class EM::P::Socks5 < EM::Connection
   def initialize(host, port)
     @host, @port = host, port
     @buffer = ''
@@ -24,7 +33,8 @@ class EM::P::Socks4 < EM::Connection
   end
 
   def socks_post_init
-    header = [4, 1, @port, @host, 0].pack("ccnNc")
+    octets = @host.split(/\./).map {|o| o.to_i }
+    header = [4, 1, @port, octets, 0].flatten.pack("ccnC4c")
     send_data(header)
   end
 
@@ -47,7 +57,7 @@ class EM::P::Socks4 < EM::Connection
   end
 end
 
-class TransocksClient < EM::P::Socks4
+class TransocksClient < EM::P::Socks5
   attr_accessor :closed
 
   def initialize(proxied, host, port)
@@ -70,12 +80,14 @@ class TransocksClient < EM::P::Socks4
   end
 end
 
-class TransocksServer < EM::Connection
+class TransocksTCPServer < EM::Connection
   attr_accessor :closed
   def post_init
-    orig_host, orig_port = orig_socket
-    addr = [orig_host].pack("N").unpack("CCCC")*'.'
-    puts "connecting to #{addr}:#{orig_port}"
+    orig_host, orig_port = orig_sockaddr
+    orig_host = [orig_host].pack("N").unpack("CCCC")*'.'
+
+    puts "connecting to #{orig_host}:#{orig_port}"
+
     @proxied = EM.connect('127.1', 6666, TransocksClient, self, orig_host, orig_port)
     proxy_incoming_to @proxied  unless @proxied.closed
   end
@@ -88,16 +100,10 @@ class TransocksServer < EM::Connection
     self.closed = true
     @proxied.close_connection_after_writing
   end
-
-  def orig_socket
-    addr = get_sock_opt(Socket::SOL_IP, 80) # Socket::SO_ORIGINAL_DST
-    _, port, host = addr.unpack("nnN")
-
-    [host, port]
-  end
 end
 
 EM.run do
   EM.error_handler { puts $!, $@ }
-  EM.start_server '127.1', '1212', TransocksServer
+
+  EM.start_server '127.1', 1212, TransocksTCPServer
 end
