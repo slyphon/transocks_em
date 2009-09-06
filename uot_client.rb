@@ -5,8 +5,10 @@ class UOTClient < EM::Connection
   def receive_data(data)
     port, host = Socket.unpack_sockaddr_in(get_peername)
 
-    dst_host = data.slice!(0, 4).unpack("C4")*'.'
-    dst_port = data.slice!(0, 2).unpack("S").first
+    dst_port = data.slice!(-2..-1).unpack("S").first
+    dst_host = data.slice!(-4..-1).unpack("C4")*'.'
+
+    p dst_host, dst_port
 
     $tunnel.mapping[[dst_host, dst_port]] = [host, port]
     $tunnel.send_object [dst_host, dst_port, data]
@@ -34,11 +36,16 @@ class UOTTunnel < EM::Connection
 
     $udp_connection.send_datagram data, dst_host, dst_port
   end
+
+  def unbind
+    p :control_conn_dropped
+  end
 end
 
 host, port, listen_port = ARGV[0..2]
 
 EM.run do
+  EM.error_handler { puts $!, $@ }
   $tunnel = EM.connect host, port, UOTTunnel
   $udp_connection = EM.open_datagram_socket '127.1', listen_port, UOTClient
 end
