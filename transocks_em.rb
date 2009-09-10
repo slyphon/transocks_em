@@ -88,7 +88,7 @@ class TransocksTCPServer < EM::Connection
 
     puts "connecting to #{orig_host}:#{orig_port}"
 
-    @proxied = EM.connect('127.1', 6666, TransocksClient, self, orig_host, orig_port)
+    @proxied = EM.connect($connect_host, $connect_port, TransocksClient, self, orig_host, orig_port)
     proxy_incoming_to @proxied  unless @proxied.closed
   end
 
@@ -102,8 +102,10 @@ class TransocksTCPServer < EM::Connection
   end
 end
 
+$connect_host, $connect_port, $listen_port = ARGV[0,3]
+
 EM.run do
   EM.error_handler { puts $!, $@ }
 
-  EM.start_server '127.1', 1212, TransocksTCPServer
+  EM.start_server '127.1', $listen_port, TransocksTCPServer
 end
