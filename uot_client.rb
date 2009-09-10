@@ -48,7 +48,7 @@ class UOTTunnel < EM::Connection
   end
 end
 
-$host, $port, listen_port = ARGV[0..2]
+$host, $port, listen_port = ARGV[0], ARGV[1].to_i, ARGV[2]
 
 EM.run do
   EM.error_handler { puts $!, $@ }
