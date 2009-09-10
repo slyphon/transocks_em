@@ -17,9 +17,12 @@ class UOTServer < EM::Connection
 
   def unbind
     p :control_conn_dropped
+    @mapping.values.each {|c| c.close_connection }
+    @mapping.clear
   end
 end
 
+# TODO: cant we use get_peername and only use a single EM.open_datagram_socket ?
 class UDPConnection < EM::Connection
   def initialize(server, host, port)
     super
