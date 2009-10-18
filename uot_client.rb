@@ -10,6 +10,7 @@ class UOTClient < EM::Connection
 
     $tunnel.mapping[[dst_host, dst_port]] = [host, port]
     $tunnel.send_object [dst_host, dst_port, data]
+
     print '>'; $stdout.flush
   end
 end

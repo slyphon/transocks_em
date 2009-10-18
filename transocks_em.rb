@@ -11,7 +11,7 @@ class EM::Connection
   end
 end
 
-class EM::P::Socks5 < EM::Connection
+class EM::P::Socks4 < EM::Connection
   def initialize(host, port)
     @host, @port = host, port
     @buffer = ''
@@ -57,7 +57,7 @@ class EM::P::Socks5 < EM::Connection
   end
 end
 
-class TransocksClient < EM::P::Socks5
+class TransocksClient < EM::P::Socks4
   attr_accessor :closed
 
   def initialize(proxied, host, port)
