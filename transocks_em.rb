@@ -13,52 +13,6 @@ class EM::Connection
   end
 end
 
-class EM::P::Socks4 < EM::Connection
-  def initialize(host, port)
-    @host, @port = host, port
-    @buffer = ''
-    setup_methods
-  end
-
-  def setup_methods
-    class << self
-      def post_init; socks_post_init; end
-      def receive_data(*a); socks_receive_data(*a); end
-    end
-  end
-
-  def restore_methods
-    class << self
-      remove_method :post_init
-      remove_method :receive_data
-    end
-  end
-
-  def socks_post_init
-    host = @host.split(/\./).map {|o| o.to_i }.pack("C4").unpack("N").first
-    header = [4, 1, @port, host, 0].flatten.pack("CCnNC")
-    send_data(header)
-  end
-
-  def socks_receive_data(data)
-    @buffer << data
-    return  if @buffer.size < 8
-
-    header_resp = @buffer.slice! 0, 8
-    _, r = header_resp.unpack("cc")
-    if r != 90
-      puts "rejected by socks server!"  
-      close_connection
-      return
-    end
-
-    restore_methods
-
-    post_init
-    receive_data(@buffer)  unless @buffer.empty?
-  end
-end
-
 class TransocksClient < EM::P::Socks4
   attr_accessor :closed
 
