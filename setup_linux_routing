@@ -1,0 +1,27 @@
+#!/bin/sh
+
+TRANSOCKS_PORT=1212
+
+if [ "$1" = "--clear" ]; then
+  sudo iptables -t nat --flush
+  echo cleared all nat rules
+  exit 0
+fi
+
+sudo iptables -t nat -X SOCKSIFY
+sudo iptables -t nat -N SOCKSIFY
+
+# Only proxy traffic for programs run with group 'prx'
+sudo iptables -t nat -A SOCKSIFY -m owner ! --gid-owner prx -j RETURN
+
+# Exceptions for local traffic
+sudo iptables -t nat -A SOCKSIFY -o lo -j RETURN
+sudo iptables -t nat -A SOCKSIFY --dst 127.0.0.1 -j RETURN
+# Add extra local nets to ignore here as necessary
+sudo iptables -t nat -A SOCKSIFY --dst 192.168.0.0/16 -j RETURN
+
+# Send to transocks
+sudo iptables -t nat -A SOCKSIFY -p tcp -j REDIRECT --to-port $TRANSOCKS_PORT
+
+# Socksify traffic leaving this host:
+sudo iptables -t nat -A OUTPUT -p tcp --syn -j SOCKSIFY
