@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# transparently proxy all traffic of processes launched with specified group to transocks daemon
+
+PROXY_GROUP=prx
 TRANSOCKS_PORT=1212
 
 if [ "$1" = "--clear" ]; then
@@ -11,8 +14,8 @@ fi
 sudo iptables -t nat -X SOCKSIFY
 sudo iptables -t nat -N SOCKSIFY
 
-# Only proxy traffic for programs run with group 'prx'
-sudo iptables -t nat -A SOCKSIFY -m owner ! --gid-owner prx -j RETURN
+# Only proxy traffic for programs run with group $PROXY_GROUP
+sudo iptables -t nat -A SOCKSIFY -m owner ! --gid-owner $PROXY_GROUP -j RETURN
 
 # Exceptions for local traffic
 sudo iptables -t nat -A SOCKSIFY -o lo -j RETURN

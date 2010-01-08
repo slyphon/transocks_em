@@ -4,12 +4,16 @@ TRANSOCKS_PORT=1212
 
 # transparently proxy ports 80, 443, and 1935 (hulu) to transocks daemon
 
-sudo killall -9 natd
-sudo ipfw -q flush
+if [ "$1" = "--clear" ]; then
+  sudo ipfw -q flush
+  echo cleared all ipfw rules
+  exit 0
+fi
 
 sudo ipfw add divert 4000 tcp from 127.0.0.1 $TRANSOCKS_PORT to me in
 sudo ipfw add divert 4000 tcp from me to any 80,443,1935 out
 
+sudo killall -9 natd
 sudo natd -port 4000 -interface lo0 -proxy_only \
   -proxy_rule type encode_tcp_stream port 80 server 127.0.0.1:$TRANSOCKS_PORT \
   -proxy_rule type encode_tcp_stream port 443 server 127.0.0.1:$TRANSOCKS_PORT \
