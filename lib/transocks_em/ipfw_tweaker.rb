@@ -2,7 +2,7 @@ require 'tempfile'
 
 module TransocksEM
   class IPFWTweaker
-    DEFAULT_START_RULE_NUM = 10_000
+    DEFAULT_START_RULE_NUM = 1_000
     OFFSET = 10
     DIVERT_PORT = 4000
     IPFW_SET_NUM = 7
@@ -19,6 +19,8 @@ module TransocksEM
       @divert_port      = opts.fetch(:divert_port, DIVERT_PORT)
       @ipfw_set_num     = opts.fetch(:ipfw_set_num, IPFW_SET_NUM)
       @added_rule_nums  = []
+      @natd_pid         = nil
+      @natd_config_tmpfile  = nil
     end
 
     def transocks_port
@@ -44,28 +46,53 @@ module TransocksEM
       ipfw *%W[add #{cur_rule_num} set #{ipfw_set_num} divert #{divert_port} tcp from 127.0.0.1 #{transocks_port} to me in]
       ipfw *%W[add #{cur_rule_num} set #{ipfw_set_num} divert #{divert_port} tcp from me to any #{ports.join(',')} out]
       ipfw *%W[set enable #{ipfw_set_num}]
+
+      logger.debug do
+        rules = `sudo ipfw list`
+        "ipfw rules: #{rules}"
+      end
     end
 
     def setup_natd!(ports)
       kill_natd!
 
-      Tempfile.open('natdrulez') do |tmp|
-        tmp.puts(<<-EOS)
+      @natd_config_tmpfile = tmp = Tempfile.new('natdrulez')
+
+      tmp.puts(<<-EOS)
 port #{divert_port} 
+log yes
 interface lo0 
 proxy_only yes
-        EOS
+      EOS
 
-        ports.each do |port|
-          tmp.puts %Q[proxy_rule type encode_tcp_stream port #{port} server 127.0.0.1:#{transocks_port}]
-        end
-
-        tmp.fsync
-
-        cmd = %W[sudo #{natd_bin} -f #{tmp.path}]
-
-        sh(*cmd)
+      ports.each do |port|
+        tmp.puts %Q[proxy_rule type encode_tcp_stream port #{port} server 127.0.0.1:#{transocks_port}]
       end
+
+      tmp.fsync
+
+      tmp.rewind
+      config = tmp.read
+
+      logger.debug { "natd config: \n#{config}" }
+
+      cmd = %W[sudo #{natd_bin} -f #{tmp.path}]
+
+      opts = {
+        :chdir => '/',
+        :in  => '/dev/null',
+        :out => [:child, :err],
+      }
+
+      opts[:err] = TransocksEM.debug? ? '/tmp/natd.log' : '/dev/null'
+
+      cmd << opts
+
+      logger.debug { "spawning natd: #{cmd.inspect}" }
+
+      @natd_pid = Process.spawn(*cmd)
+
+      logger.debug { "launched natd pid: #{@natd_pid}" } 
     end
 
     def clear_ipfw_rules!
@@ -74,24 +101,27 @@ proxy_only yes
     end
 
     def kill_natd!
-      # XXX: HERE
-      `ps auwwx`.split("\n").each do |line| 
-        login, pid, *a = line.split(/\s+/, 11)
-        cmd = a.last
-
-        if cmd.index(natd_bin)
-          logger.info { "found natd process: #{cmd.inspect}, killing #{pid}" }
-          sh('sudo', 'kill', '-9', pid)
-          return
-        end
+      if @natd_config_tmpfile
+        @natd_config_tmpfile.close
+        @natd_config_tmpfile = nil
       end
-      logger.info { "no natd process found" }
-    rescue RuntimeError
+
+      if @natd_pid
+        sh(*%W[sudo kill -9 #{@natd_pid}])
+        Process.waitpid2(@natd_pid)
+        @natd_pid = nil
+      end
     end
 
     protected
       def ipfw(*args)
-        sh('sudo', IPFW_BIN, *args)
+        cmd = ['sudo', IPFW_BIN]
+        
+        cmd << '-q' unless TransocksEM.debug?
+
+        cmd += args
+
+        sh(*cmd)
       end
 
       def sh(*cmd)

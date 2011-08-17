@@ -10,6 +10,8 @@ Usage: transsocks_em.rb [opts] <proxy_to_host> <proxy_to_port> <listen_port>
        incompatible with certain protocols, SSH for example).  This is the
        default for Darwin (checked using 'uname -s').
 
+If --debug is enabled, natd debugging output goes to /tmp/natd.log
+
 
     EOS
 
@@ -34,6 +36,7 @@ Usage: transsocks_em.rb [opts] <proxy_to_host> <proxy_to_port> <listen_port>
         o.on('-P', '--ports a,b,c', Array, 'the ports to divert to socks (mandatory)') do |a|
           @divert_ports = a.map { |n| Integer(n) }
         end
+        o.on('-D', '--debug', 'set debug logging') { config[:debug] = true }
         o.on('-h', '--help', "you're reading it") { help! }
       end
     end
@@ -59,7 +62,7 @@ Usage: transsocks_em.rb [opts] <proxy_to_host> <proxy_to_port> <listen_port>
       Logging.backtrace(true)
 
       Logging.logger.root.tap do |root|
-        root.level = :debug
+        root.level = TransocksEM.debug? ? :debug : :info
         root.add_appenders(Logging.appenders.stderr)
       end
 

@@ -15,12 +15,20 @@ module TransocksEM
     @@config
   end
 
+  def self.debug?
+    false|config[:debug] 
+  end
+
   class EM::Connection
     def orig_sockaddr
       addr = get_sock_opt(Socket::SOL_IP, 80) # Socket::SO_ORIGINAL_DST
       _, port, host = addr.unpack("nnN")
 
       [host, port]
+    end
+
+    def bsd_orig_sockaddr
+#       get_sock_opt(4, 3)
     end
   end
 
@@ -55,6 +63,10 @@ module TransocksEM
       @ipfw_natd_style = ipfw_natd_style
     end
 
+    def connection_completed
+      logger.debug { "connection_completed" }
+    end
+
     def post_init
       return  if @ipfw_natd_style
 
@@ -84,17 +96,16 @@ module TransocksEM
     end
 
     private
+      def config
+        TransocksEM.config
+      end
 
-    def config
-      TransocksEM.config
-    end
+      def proxy_to(orig_host, orig_port)
+        logger.debug { "connecting to #{orig_host}:#{orig_port}" }
 
-    def proxy_to(orig_host, orig_port)
-      logger.debug { "connecting to #{orig_host}:#{orig_port}" }
-
-      @proxied = EM.connect(config[:connect_host], config[:connect_port], TransocksClient, self, orig_host, orig_port)
-      proxy_incoming_to @proxied  unless @proxied.closed
-    end
+        @proxied = EM.connect(config[:connect_host], config[:connect_port], TransocksClient, self, orig_host, orig_port)
+        proxy_incoming_to @proxied  unless @proxied.closed
+      end
   end
 end
 
