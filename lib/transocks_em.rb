@@ -1,6 +1,7 @@
 require 'socket'
 require 'eventmachine'
 require 'logging'
+require 'optparse'
 
 include Logging.globally
 
@@ -50,6 +51,7 @@ module TransocksEM
     attr_accessor :closed
 
     def initialize(ipfw_natd_style = false)
+      logger.debug { "started server, ipfw_natd_style: #{ipfw_natd_style}" }
       @ipfw_natd_style = ipfw_natd_style
     end
 
@@ -88,7 +90,7 @@ module TransocksEM
     end
 
     def proxy_to(orig_host, orig_port)
-      logger.info { "connecting to #{orig_host}:#{orig_port}" }
+      logger.debug { "connecting to #{orig_host}:#{orig_port}" }
 
       @proxied = EM.connect(config[:connect_host], config[:connect_port], TransocksClient, self, orig_host, orig_port)
       proxy_incoming_to @proxied  unless @proxied.closed
@@ -97,4 +99,5 @@ module TransocksEM
 end
 
 require 'transocks_em/command'
+require 'transocks_em/ipfw_tweaker'
 

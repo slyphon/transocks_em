@@ -40,16 +40,10 @@ module TransocksEM
     end
 
     def add_ipfw_diversion_rules!(ports)
-      Tempfile.open('ipfwrulez', Dir.tmpdir, :encoding => 'utf8')  do |tmp|
-        tmp.puts <<-EOS
-#{cur_rule_num} set #{ipfw_set_num} add divert #{divert_port} tcp from 127.0.0.1 #{transocks_port} to me in
-#{cur_rule_num} set #{ipfw_set_num} add divert #{divert_port} from me to any #{ports.join(',')} out
-        EOS
-
-        tmp.fsync
-
-        sh "sudo #{IPFW_BIN} #{tmp.path}"
-      end
+      ipfw *%W[set disable #{ipfw_set_num}]
+      ipfw *%W[add #{cur_rule_num} set #{ipfw_set_num} divert #{divert_port} tcp from 127.0.0.1 #{transocks_port} to me in]
+      ipfw *%W[add #{cur_rule_num} set #{ipfw_set_num} divert #{divert_port} tcp from me to any #{ports.join(',')} out]
+      ipfw *%W[set enable #{ipfw_set_num}]
     end
 
     def setup_natd!(ports)
@@ -63,26 +57,43 @@ proxy_only yes
         EOS
 
         ports.each do |port|
-          tmp.puts %Q[-proxy_rule type encode_tcp_stream port #{port} server 127.0.0.1:#{transocks_port}]
+          tmp.puts %Q[proxy_rule type encode_tcp_stream port #{port} server 127.0.0.1:#{transocks_port}]
         end
+
+        tmp.fsync
+
+        cmd = %W[sudo #{natd_bin} -f #{tmp.path}]
+
+        sh(*cmd)
       end
-
-      cmd = %W[sudo #{natd_bin} -f #{tmp.path}]
-
-      sh(*cmd)
     end
 
     def clear_ipfw_rules!
-      sh(%W[sudo ipfw delete set #{ipfw_set_num}])
+      sh(*%W[sudo ipfw delete set #{ipfw_set_num}])
     rescue RuntimeError
     end
 
     def kill_natd!
-      sh "sudo killall -9 #{natd_bin}"
+      # XXX: HERE
+      `ps auwwx`.split("\n").each do |line| 
+        login, pid, *a = line.split(/\s+/, 11)
+        cmd = a.last
+
+        if cmd.index(natd_bin)
+          logger.info { "found natd process: #{cmd.inspect}, killing #{pid}" }
+          sh('sudo', 'kill', '-9', pid)
+          return
+        end
+      end
+      logger.info { "no natd process found" }
     rescue RuntimeError
     end
 
     protected
+      def ipfw(*args)
+        sh('sudo', IPFW_BIN, *args)
+      end
+
       def sh(*cmd)
         logger.debug { "running command: #{cmd.join(' ')}" }
 
