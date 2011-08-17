@@ -28,20 +28,27 @@ natd - puts daemon in ipfw/natd bsd mode rather than linux iptables SO_ORIGINAL_
 
       config.merge({
         :connect_host => host,
-        :connect_port => port, 
-        :listen_port  => listen,
+        :connect_port => port.to_i, 
+        :listen_port  => listen.to_i,
       })
 
       Logging.backtrace(true)
 
       Logging.logger.root.tap do |root|
         root.level = :debug
-        root.add_appenders(Logging.appender.stderr)
+        root.add_appenders(Logging.appenders.stderr)
       end
 
       if (ARGV[3] == 'natd') or (TransocksEM::OPSYS =~ /^(?:Darwin|FreeBSD)$/)
         config[:natd] = true
         logger.info { "set natd mode" }
+      end
+
+      %w[INT TERM].each do |sig|
+        Kernel.trap(sig) do
+          logger.info { "trapped signal #{sig}, shutting down" }
+          EM.next_tick { EM.stop_event_loop }
+        end
       end
 
       EM.run do
