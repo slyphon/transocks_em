@@ -3,13 +3,15 @@ require 'tempfile'
 module TransocksEM
   class IPFWTweaker
     DEFAULT_START_RULE_NUM = 1_000
+    DEFAULT_NAT_ENCODING = 'encode_tcp_stream'.freeze
+
     OFFSET = 10
     DIVERT_PORT = 4000
     IPFW_SET_NUM = 7
 
     IPFW_BIN = '/sbin/ipfw' # Darwin & FreeBSD
 
-    attr_reader :start_rule_num, :offset, :ipfw_set_num, :added_rule_nums, :divert_port
+    attr_reader :start_rule_num, :offset, :ipfw_set_num, :added_rule_nums, :divert_port, :nat_encoding
 
     def initialize(opts={})
       @start_rule_num   = opts.fetch(:start_rule_num, DEFAULT_START_RULE_NUM)
@@ -18,9 +20,12 @@ module TransocksEM
       @offset           = opts.fetch(:offset, OFFSET)
       @divert_port      = opts.fetch(:divert_port, DIVERT_PORT)
       @ipfw_set_num     = opts.fetch(:ipfw_set_num, IPFW_SET_NUM)
+      @nat_encoding     = opts.fetch(:nat_encoding, DEFAULT_NAT_ENCODING)
+
       @added_rule_nums  = []
       @natd_pid         = nil
       @natd_config_tmpfile  = nil
+      validate!
     end
 
     def transocks_port
@@ -66,7 +71,7 @@ proxy_only yes
       EOS
 
       ports.each do |port|
-        tmp.puts %Q[proxy_rule type encode_tcp_stream port #{port} server 127.0.0.1:#{transocks_port}]
+        tmp.puts %Q[proxy_rule type #{nat_encoding} port #{port} server 127.0.0.1:#{transocks_port}]
       end
 
       tmp.fsync
@@ -150,6 +155,10 @@ proxy_only yes
         @added_rule_nums << orig
         @cur_rule_num += @offset
         orig
+      end
+
+      def validate!
+        raise ArgumentError, "nat_encoding must be encode_ip_hdr or encode_tcp_stream, not #{@nat_encoding.inspect}" unless @nat_encoding =~ /^(encode_ip_hdr|encode_tcp_stream)$/
       end
   end
 end
