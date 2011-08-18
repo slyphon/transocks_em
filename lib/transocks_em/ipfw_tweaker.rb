@@ -47,6 +47,12 @@ module TransocksEM
     end
 
     def add_ipfw_diversion_rules!(ports)
+      if freebsd?
+        if `kldstat`.split("\n").grep(/ipdivert\.ko$/).empty?
+          sh("sudo kldload ipdivert")
+        end
+      end
+
       ipfw *%W[set disable #{ipfw_set_num}]
       ipfw *%W[add #{cur_rule_num} set #{ipfw_set_num} divert #{divert_port} tcp from 127.0.0.1 #{transocks_port} to me in]
       ipfw *%W[add #{cur_rule_num} set #{ipfw_set_num} divert #{divert_port} tcp from me to any #{ports.join(',')} out]
@@ -87,9 +93,13 @@ proxy_only yes
         :chdir => '/',
         :in  => '/dev/null',
         :out => [:child, :err],
+        :err => '/dev/null',
       }
 
-      opts[:err] = TransocksEM.debug? ? '/tmp/natd.log' : '/dev/null'
+      if TransocksEM.debug?
+        cmd << '-v'
+        opts[:err] = '/tmp/natd.log'
+      end
 
       cmd << opts
 
@@ -148,6 +158,10 @@ proxy_only yes
             raise "don't know about natd on opsys: #{OPSYS}"
           end
         )
+      end
+
+      def freebsd?
+        OPSYS == 'FreeBSD'
       end
 
       def cur_rule_num

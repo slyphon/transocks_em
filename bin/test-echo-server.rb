@@ -20,7 +20,7 @@ end
 class SimpleEchoServer
   def initialize
     @serv = nil
-    @ipfw_tweaker = TransocksEM::IPFWTweaker.new(:nat_encoding => 'encode_ip_hdr')
+    @ipfw_tweaker = TransocksEM::IPFWTweaker.new(:nat_encoding => 'encode_ip_hdr', :start_rule_num => 10)
   end
 
   def timestamp
